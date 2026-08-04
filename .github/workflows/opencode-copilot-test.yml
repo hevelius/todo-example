@@ -1,0 +1,27 @@
+name: OpenCode Copilot Auth Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-copilot-auth:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+
+      - name: Restore Copilot auth
+        run: |
+          mkdir -p ~/.local/share/opencode
+          echo '${{ secrets.OPENCODE_AUTH_JSON }}' > ~/.local/share/opencode/auth.json
+
+      - name: Test non-interactive run with Copilot
+        run: opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-4-6
