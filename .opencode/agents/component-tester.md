@@ -1,6 +1,7 @@
 ---
 description: Writes tests using Vitest and React Testing Library, runs them, and does not touch the component logic.
 mode: subagent
+steps: 10
 permission:
   bash:
     "*": ask

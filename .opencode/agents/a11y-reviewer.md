@@ -1,6 +1,7 @@
 ---
 description: Check accessibility (a11y) and React/UX best practices.
 mode: subagent
+steps: 10
 permission:
   edit: deny
   bash: deny
