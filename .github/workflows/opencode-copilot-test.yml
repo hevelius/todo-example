@@ -33,4 +33,4 @@ jobs:
 
       - name: Test non-interactive run with Copilot (verbose)
         run: |
-          opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-4-6 --print-logs
+          opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-5 --print-logs
