@@ -6,7 +6,7 @@ on:
     - cron: "0 9 * * 1-5"
 
 env:
-  MAX_STUCK: 2   # tentativi falliti consecutivi sullo stesso task prima di fermarsi
+  MAX_STUCK: 2   # consecutive failed attempts on the same task before stopping
 
 jobs:
   run-task:
@@ -34,7 +34,7 @@ jobs:
         run: |
           TASK_LINE=$(grep -m1 '^\- \[ \]' tasks.md || true)
           if [ -z "$TASK_LINE" ]; then
-            echo "Nessun task rimasto in tasks.md"
+            echo "No tasks left in tasks.md"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -50,9 +50,9 @@ jobs:
         if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count >= env.MAX_STUCK
         run: |
           gh issue create \
-            --title "Task bloccato dopo ${{ env.MAX_STUCK }} tentativi: ${{ steps.pick.outputs.task_id }}" \
-            --body "Il loop ha ripetuto lo stesso errore ${{ env.MAX_STUCK }} volte su questo task. Serve intervento manuale. Vedi progress.md per il dettaglio."
-          echo "Task bloccato, mi fermo senza ritentare."
+            --title "Task stuck after ${{ env.MAX_STUCK }} attempts: ${{ steps.pick.outputs.task_id }}" \
+            --body "The loop repeated the same error ${{ env.MAX_STUCK }} times on this task. Manual intervention required. See progress.md for details."
+          echo "Task stuck, stopping without retrying."
           exit 0
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,9 +60,9 @@ jobs:
       - name: Run the task with OpenCode
         if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count < env.MAX_STUCK
         run: |
-          opencode run "Leggi tasks.md, implementa questo task: ${{ steps.pick.outputs.task_text }}. \
-          Poi @component-tester scrivi ed esegui i test, @a11y-reviewer controlla l'accessibilità. \
-          Non segnare nulla come completato in tasks.md, lo farà lo step successivo."
+          opencode run "Read tasks.md, implement this task: ${{ steps.pick.outputs.task_text }}. \
+          Then @component-tester writes and runs the tests, @a11y-reviewer checks accessibility. \
+          Do not mark anything as completed in tasks.md, the next step will do it."
 
       - name: Verify (the real checker)
         id: verify
@@ -83,10 +83,10 @@ jobs:
           git config user.name "opencode-bot"
           git config user.email "opencode-bot@users.noreply.github.com"
           git add -A
-          git commit -m "Auto: completa task ${{ steps.pick.outputs.task_id }}"
+          git commit -m "Auto: complete task ${{ steps.pick.outputs.task_id }}"
           git push origin "$BRANCH"
-          gh pr create --title "Task automatico: ${{ steps.pick.outputs.task_id }}" \
-            --body "Eseguito dal loop. Test e a11y review passati. Vedi il diff per i dettagli."
+          gh pr create --title "Automatic task: ${{ steps.pick.outputs.task_id }}" \
+            --body "Executed by the loop. Tests and a11y review passed. See the diff for details."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -105,5 +105,5 @@ jobs:
           git config user.name "opencode-bot"
           git config user.email "opencode-bot@users.noreply.github.com"
           git add progress.md
-          git commit -m "Registra tentativo fallito su task ${{ steps.pick.outputs.task_id }} ($NEW_COUNT/${{ env.MAX_STUCK }})"
+          git commit -m "Record failed attempt on task ${{ steps.pick.outputs.task_id }} ($NEW_COUNT/${{ env.MAX_STUCK }})"
           git push origin HEAD:main
