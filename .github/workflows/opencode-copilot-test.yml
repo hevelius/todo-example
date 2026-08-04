@@ -24,4 +24,5 @@ jobs:
           echo '${{ secrets.OPENCODE_AUTH_JSON }}' > ~/.local/share/opencode/auth.json
 
       - name: Test non-interactive run with Copilot
-        run: opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-4-6
+        run: |
+          opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-4-6
