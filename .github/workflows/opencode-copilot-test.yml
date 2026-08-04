@@ -1,22 +1,25 @@
-name: OpenCode Copilot Auth Test
+name: OpenCode Task Runner
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * 1-5"
+
+env:
+  MAX_STUCK: 2   # tentativi falliti consecutivi sullo stesso task prima di fermarsi
 
 jobs:
-  test-copilot-auth:
+  run-task:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v6
 
       - name: Install OpenCode
         run: curl -fsSL https://opencode.ai/install | bash
-
-      - name: Verify install
-        run: opencode --version
 
       - name: Add OpenCode to PATH
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
@@ -26,11 +29,81 @@ jobs:
           mkdir -p ~/.local/share/opencode
           echo '${{ secrets.OPENCODE_AUTH_JSON }}' > ~/.local/share/opencode/auth.json
 
-      - name: Verify auth.json structure (no secrets printed)
+      - name: Identify next task and stuck count
+        id: pick
         run: |
-          jq 'keys' ~/.local/share/opencode/auth.json
-          jq '.["github-copilot"] | keys' ~/.local/share/opencode/auth.json
+          TASK_LINE=$(grep -m1 '^\- \[ \]' tasks.md || true)
+          if [ -z "$TASK_LINE" ]; then
+            echo "Nessun task rimasto in tasks.md"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TASK_ID=$(echo "$TASK_LINE" | md5sum | cut -c1-8)
+          STUCK=$(grep -A1 "^## task:$TASK_ID" progress.md 2>/dev/null | grep -oP 'attempts:\s*\K[0-9]+' || echo 0)
 
-      - name: Test non-interactive run with Copilot (verbose)
+          echo "task_text=$TASK_LINE" >> "$GITHUB_OUTPUT"
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+          echo "stuck_count=$STUCK" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Stop and flag if stuck (no-progress check)
+        if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count >= env.MAX_STUCK
         run: |
-          opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-5 --print-logs
+          gh issue create \
+            --title "Task bloccato dopo ${{ env.MAX_STUCK }} tentativi: ${{ steps.pick.outputs.task_id }}" \
+            --body "Il loop ha ripetuto lo stesso errore ${{ env.MAX_STUCK }} volte su questo task. Serve intervento manuale. Vedi progress.md per il dettaglio."
+          echo "Task bloccato, mi fermo senza ritentare."
+          exit 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the task with OpenCode
+        if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count < env.MAX_STUCK
+        run: |
+          opencode run "Leggi tasks.md, implementa questo task: ${{ steps.pick.outputs.task_text }}. \
+          Poi @component-tester scrivi ed esegui i test, @a11y-reviewer controlla l'accessibilità. \
+          Non segnare nulla come completato in tasks.md, lo farà lo step successivo."
+
+      - name: Verify (the real checker)
+        id: verify
+        if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count < env.MAX_STUCK
+        run: |
+          npm test > test_output.log 2>&1 && npx tsc --noEmit >> test_output.log 2>&1
+          echo "passed=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: On success — mark done, commit, open PR
+        if: steps.verify.outputs.passed == '0'
+        run: |
+          sed -i "0,/^- \[ \]/{s/^- \[ \]/- [x]/}" tasks.md
+          sed -i "/^## task:${{ steps.pick.outputs.task_id }}/,+2d" progress.md 2>/dev/null || true
+
+          BRANCH="task-${{ steps.pick.outputs.task_id }}-${{ github.run_number }}"
+          git checkout -b "$BRANCH"
+          git config user.name "opencode-bot"
+          git config user.email "opencode-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "Auto: completa task ${{ steps.pick.outputs.task_id }}"
+          git push origin "$BRANCH"
+          gh pr create --title "Task automatico: ${{ steps.pick.outputs.task_id }}" \
+            --body "Eseguito dal loop. Test e a11y review passati. Vedi il diff per i dettagli."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: On failure — record attempt in the spine, no PR
+        if: steps.pick.outputs.skip == 'false' && steps.verify.outputs.passed != '0'
+        run: |
+          NEW_COUNT=$((${{ steps.pick.outputs.stuck_count }} + 1))
+          {
+            echo "## task:${{ steps.pick.outputs.task_id }}"
+            echo "attempts: $NEW_COUNT"
+            echo "last_error:"
+            tail -30 test_output.log
+            echo ""
+          } >> progress.md
+
+          git config user.name "opencode-bot"
+          git config user.email "opencode-bot@users.noreply.github.com"
+          git add progress.md
+          git commit -m "Registra tentativo fallito su task ${{ steps.pick.outputs.task_id }} ($NEW_COUNT/${{ env.MAX_STUCK }})"
+          git push origin HEAD:main
