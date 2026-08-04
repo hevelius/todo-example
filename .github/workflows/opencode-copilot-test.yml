@@ -15,6 +15,9 @@ jobs:
       - name: Install OpenCode
         run: curl -fsSL https://opencode.ai/install | bash
 
+      - name: Verify install
+        run: opencode --version
+
       - name: Add OpenCode to PATH
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
@@ -23,6 +26,11 @@ jobs:
           mkdir -p ~/.local/share/opencode
           echo '${{ secrets.OPENCODE_AUTH_JSON }}' > ~/.local/share/opencode/auth.json
 
-      - name: Test non-interactive run with Copilot
+      - name: Verify auth.json structure (no secrets printed)
         run: |
-          opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-4-6
+          jq 'keys' ~/.local/share/opencode/auth.json
+          jq '.["github-copilot"] | keys' ~/.local/share/opencode/auth.json
+
+      - name: Test non-interactive run with Copilot (verbose)
+        run: |
+          opencode run "Rispondi solo con: autenticazione riuscita" --model github-copilot/claude-sonnet-4-6 --print-logs
