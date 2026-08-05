@@ -1,8 +1,8 @@
-import { useCallback } from 'react';
-import { useLocalStorage } from './useLocalStorage';
-import type { Task } from '../types/task';
+import { useCallback } from 'react'
+import { useLocalStorage } from './useLocalStorage'
+import type { Task } from '../types/task'
 
-const STORAGE_KEY = 'tasks';
+const STORAGE_KEY = 'tasks'
 
 export function useTasks() {
   const [tasks, setTasks] = useLocalStorage<Task[]>(STORAGE_KEY, []);
