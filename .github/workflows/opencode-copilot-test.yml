@@ -84,7 +84,7 @@ jobs:
         continue-on-error: true
 
       - name: On success — mark done, commit, open PR
-        if: steps.verify.outputs.passed == '0'
+        if: steps.pick.outputs.skip == 'false' && steps.verify.outputs.passed == '0'
         run: |
           sed -i "0,/^- \[ \]/{s/^- \[ \]/- [x]/}" tasks.md
           sed -i "/^## task:${{ steps.pick.outputs.task_id }}/,+2d" progress.md 2>/dev/null || true
