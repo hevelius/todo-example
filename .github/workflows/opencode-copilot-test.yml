@@ -2,8 +2,6 @@ name: OpenCode Task Runner
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 9 * * 1-5"
 
 env:
   MAX_STUCK: 2   # consecutive failed attempts on the same task before stopping
