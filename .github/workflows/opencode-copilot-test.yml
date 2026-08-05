@@ -37,12 +37,24 @@ jobs:
             exit 0
           fi
           TASK_ID=$(echo "$TASK_LINE" | md5sum | cut -c1-8)
-          STUCK=$(grep -A1 "^## task:$TASK_ID" progress.md 2>/dev/null | grep -oP 'attempts:\s*\K[0-9]+' || echo 0)
 
+          # --- New Check: Is there an existing PR for this task? ---
+          EXISTING_PR=$(gh pr list --state open --json headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"task-$TASK_ID-\")) | .headRefName" | head -1)
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR already open for this task ($EXISTING_PR), not restarting. Waiting for merge."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          STUCK=$(grep -A1 "^## task:$TASK_ID" progress.md 2>/dev/null | grep -oP 'attempts:\s*\K[0-9]+' || echo 0)
           echo "task_text=$TASK_LINE" >> "$GITHUB_OUTPUT"
           echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
           echo "stuck_count=$STUCK" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Stop and flag if stuck (no-progress check)
         if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count >= env.MAX_STUCK
