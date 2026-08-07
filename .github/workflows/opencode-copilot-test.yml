@@ -68,13 +68,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
+        if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count < env.MAX_STUCK
         run: npm ci --ignore-scripts
         
       - name: Run the task with OpenCode
         timeout-minutes: 8
         if: steps.pick.outputs.skip == 'false' && steps.pick.outputs.stuck_count < env.MAX_STUCK
+        env:
+          TASK_TEXT: ${{ steps.pick.outputs.task_text }}
         run: |
-          opencode run "Read tasks.md, implement this task: ${{ steps.pick.outputs.task_text }}. \
+          opencode run "Read tasks.md, implement this task: $TASK_TEXT. \
           Then @component-tester writes and runs the tests, @a11y-reviewer checks accessibility. \
           Do not mark anything as completed in tasks.md, the next step will do it." --print-logs
 
